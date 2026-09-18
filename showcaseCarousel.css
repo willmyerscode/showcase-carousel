@@ -8,7 +8,7 @@
  * Layout:
  * --carousel-bleed: 0px;                          (how far the carousel pulls past the section gutter when the fullBleed setting is off)
  * --carousel-center-width: 48vw;                   (width of the centered slide)
- * --carousel-side-width: 38vw;                     (width of the slides either side)
+ * --carousel-side-scale: 0.8;                      (how large the slides either side are next to the centered one)
  * --carousel-slide-gap: 20px;                      (space between slides)
  * --carousel-slide-aspect-ratio: 16 / 9;           (aspect ratio of every slide)
  * --carousel-slide-radius: 0px;
@@ -25,7 +25,7 @@
  * --carousel-description-color: hsla(var(--white-hsl), 1);
  * --carousel-description-size: 0.9rem;
  * --carousel-description-opacity: 0.85;
- * --carousel-inactive-text-opacity: 1;             (text opacity on the non centered slides)
+ * --carousel-inactive-text-opacity: 1;             (text opacity on the non centered slides; the hideInactiveText setting overrides this with 0)
  *
  * Arrows:
  * --carousel-arrow-size: 60px;
@@ -53,8 +53,9 @@
  * --carousel-section-button-align: center;
  *
  * Mobile (max-width: 767px):
+ * --carousel-transition-mobile: var(--carousel-transition);            (matches desktop unless set)
  * --carousel-center-width-mobile: 86vw;
- * --carousel-side-width-mobile: 38vw;
+ * --carousel-side-scale-mobile: 0.72;
  * --carousel-slide-gap-mobile: 10px;
  * --carousel-text-padding-mobile: 16px;
  * --carousel-title-size-mobile: 1rem;
@@ -141,8 +142,9 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
   width: var(--carousel-center-width, 48vw);
 }
 
-[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="side"] {
-  width: var(--carousel-side-width, 38vw);
+/* 100px times the scale, so the plugin reads the number back as a width. */
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="side-scale"] {
+  width: calc(var(--carousel-side-scale, 0.8) * 100px);
 }
 
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="gap"] {
@@ -165,16 +167,27 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
   left: 0;
   /* Parked off canvas until the layout pass places it. */
   transform: translate3d(-9999px, -50%, 0);
+  /* The plugin scales the slides rather than resizing them, and scaling from
+     the left edge keeps the arithmetic in visual widths: a slide's left edge
+     stays where the layout pass put it. */
+  transform-origin: left center;
   opacity: var(--carousel-inactive-opacity, 0.5);
   transition: transform var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)),
-              width var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)),
               opacity var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1));
-  will-change: transform, width;
 }
 
+/* Promote the slides only for the duration of a drag. Holding every slide on
+   its own compositor layer for the life of the page costs a phone real texture
+   memory, and the hint goes on at pointerdown — before any movement — so the
+   layers are ready by the first frame. */
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel[data-carousel-dragging] .wm-showcase-carousel-slide {
+  will-change: transform;
+}
+
+/* Stacking is written per slide by the layout pass, ordered by distance from
+   the center, so it cannot be set here. */
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide[data-center] {
   opacity: 1;
-  z-index: 2;
 }
 
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel[data-carousel-draggable] .wm-showcase-carousel-slide:not([data-center]) {
@@ -228,6 +241,14 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
 
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide:not([data-center]) .wm-showcase-carousel-content {
   opacity: var(--carousel-inactive-text-opacity, 1);
+}
+
+/* hideInactiveText setting: the whole overlay goes, gradient and button with
+   it, so a side slide is just its image. It fades on the same timing as the
+   slide, and stops taking clicks once it is invisible. */
+[data-wm-plugin="showcase-carousel"][data-carousel-hide-inactive-text] .wm-showcase-carousel-slide:not([data-center]) .wm-showcase-carousel-content {
+  opacity: 0;
+  pointer-events: none;
 }
 
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-title {
@@ -386,12 +407,34 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
    ================================ */
 
 @media (max-width: 767px) {
+  /* Mobile follows the same movement as desktop by default, including any
+     override of --carousel-transition. These declarations exist only so
+     --carousel-transition-mobile can give a phone its own timing. */
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide {
+    transition: transform var(--carousel-transition-mobile, var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1))),
+                opacity var(--carousel-transition-mobile, var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)));
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-track {
+    transition: height var(--carousel-transition-mobile, var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)));
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-content {
+    transition: opacity var(--carousel-transition-mobile, var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)));
+  }
+
+  /* The loop wrap animation reads its duration and easing back off this
+     element, so it follows the mobile curve too. */
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-progress-bar {
+    transition: transform var(--carousel-transition-mobile, var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)));
+  }
+
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="center"] {
     width: var(--carousel-center-width-mobile, 86vw);
   }
 
-  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="side"] {
-    width: var(--carousel-side-width-mobile, 38vw);
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="side-scale"] {
+    width: calc(var(--carousel-side-scale-mobile, 0.72) * 100px);
   }
 
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="gap"] {

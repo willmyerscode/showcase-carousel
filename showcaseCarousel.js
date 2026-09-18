@@ -24,11 +24,16 @@ class WMShowcaseCarousel {
   // Aspect ratio used when the browser cannot resolve the ratio probe.
   static fallbackAspectRatio = 0.5625;
 
+  // Stacking for the centered slide, counting down for each step away from it.
+  // Stays below the arrows' z-index of 10.
+  static maxSlideZIndex = 6;
+
   constructor(el, settings = {}) {
     this.el = el;
     this.settings = {
       draggable: true, // drag/swipe to move between slides
       clickToCenter: true, // clicking a side slide brings it to the center
+      hideInactiveText: false, // hide the text overlay on the side slides
       showProgress: true, // progress bar below the carousel
       autoplay: false, // advance on a timer
       autoplaySpeed: 5000, // ms between automatic advances
@@ -66,7 +71,10 @@ class WMShowcaseCarousel {
     this.dragStartY = 0;
     this.dragDeltaX = 0;
     this.suppressClick = false;
-    this.skipProgressTransition = false;
+    this.dragFrame = null;
+    this.progressWrapDirection = 0; // set to the travel direction on a loop wrap
+    this.progressWrapFrom = 0;
+    this.progressWrapAnimation = null;
     this.autoplayTimer = null;
     this.isAutoplayPaused = false;
     this.isVisible = true;
@@ -103,6 +111,9 @@ class WMShowcaseCarousel {
 
   addDataAttribute() {
     this.el.setAttribute('data-wm-plugin', this.pluginName);
+    if (this.settings.hideInactiveText) {
+      this.el.setAttribute('data-carousel-hide-inactive-text', 'true');
+    }
   }
 
   extractData() {
@@ -273,7 +284,7 @@ class WMShowcaseCarousel {
     const metrics = document.createElement('div');
     metrics.className = 'wm-showcase-carousel-metrics';
     metrics.setAttribute('aria-hidden', 'true');
-    ['center', 'side', 'gap', 'ratio'].forEach(name => {
+    ['center', 'side-scale', 'gap', 'ratio'].forEach(name => {
       const probe = document.createElement('span');
       probe.dataset.metric = name;
       metrics.appendChild(probe);
@@ -344,11 +355,34 @@ class WMShowcaseCarousel {
       : 0;
   }
 
-  buildImageUrl(assetUrl) {
+  buildImageUrl(assetUrl, width) {
     if (!assetUrl) return '';
     const base = assetUrl.split('?')[0];
-    const width = parseInt(this.settings.imageWidth, 10);
     return Number.isFinite(width) ? `${base}?format=${width}w` : base;
+  }
+
+  /**
+   * Squarespace lists the widths it rendered for an asset in systemDataVariants
+   * ("2500x1406,100w,300w,…"). Offering them lets a phone fetch a 750w file for
+   * a 330px slide instead of the full imageWidth: a smaller download, and a far
+   * smaller texture for the GPU to move while the carousel is being dragged.
+   */
+  buildImageSrcset(image, maxWidth) {
+    const variants = image?.systemDataVariants;
+    if (typeof variants !== 'string') return '';
+
+    const widths = variants
+      .split(',')
+      .map(variant => /^(\d+)w$/.exec(variant.trim()))
+      .filter(Boolean)
+      .map(match => parseInt(match[1], 10))
+      .filter(width => Number.isFinite(width) && width <= maxWidth)
+      .sort((a, b) => a - b);
+
+    if (widths.length < 2) return '';
+    return widths
+      .map(width => `${this.buildImageUrl(image.assetUrl, width)} ${width}w`)
+      .join(', ');
   }
 
   buildSlide(item, index) {
@@ -363,8 +397,19 @@ class WMShowcaseCarousel {
     media.className = 'wm-showcase-carousel-media';
 
     if (item.image?.assetUrl && this.options?.isMediaEnabled !== false) {
+      const maxWidth = parseInt(this.settings.imageWidth, 10);
       const img = document.createElement('img');
-      img.src = this.buildImageUrl(item.image.assetUrl);
+      img.src = this.buildImageUrl(item.image.assetUrl, maxWidth);
+
+      const srcset = this.buildImageSrcset(item.image, maxWidth);
+      if (srcset) {
+        img.srcset = srcset;
+        // Mirrors the stylesheet's default centered and side widths at each
+        // breakpoint. It only has to be close: the browser rounds up to the
+        // next variant it has.
+        img.sizes = '(max-width: 767px) 86vw, 48vw';
+      }
+
       img.alt = item.image.title || item.title || '';
       img.loading = 'lazy';
       img.draggable = false;
@@ -434,7 +479,7 @@ class WMShowcaseCarousel {
 
   readMetrics(viewportWidth) {
     const centerProbe = this.metricsEl?.querySelector('[data-metric="center"]');
-    const sideProbe = this.metricsEl?.querySelector('[data-metric="side"]');
+    const scaleProbe = this.metricsEl?.querySelector('[data-metric="side-scale"]');
     const gapProbe = this.metricsEl?.querySelector('[data-metric="gap"]');
     const ratioProbe = this.metricsEl?.querySelector('[data-metric="ratio"]');
 
@@ -442,12 +487,15 @@ class WMShowcaseCarousel {
     // unresolved value falls back to the same numbers the stylesheet ships.
     // Rects rather than offsetWidth: the ratio probe needs sub-pixel precision.
     const centerRect = centerProbe?.getBoundingClientRect();
-    const sideRect = sideProbe?.getBoundingClientRect();
+    // The side probe is 100px wide times the scale, so its measured width is
+    // the scale in hundredths. Going through a probe rather than reading the
+    // property means a calc() or a media query override resolves for free.
+    const scaleRect = scaleProbe?.getBoundingClientRect();
     const gapRect = gapProbe?.getBoundingClientRect();
     const ratioRect = ratioProbe?.getBoundingClientRect();
 
     const centerWidth = Math.round(centerRect?.width || viewportWidth * 0.48);
-    const sideWidth = Math.round(sideRect?.width || viewportWidth * 0.38);
+    const sideScale = scaleRect?.width ? scaleRect.width / 100 : 0.8;
     const gap = Math.round(gapRect?.width || 20);
 
     let ratio = WMShowcaseCarousel.fallbackAspectRatio;
@@ -455,7 +503,7 @@ class WMShowcaseCarousel {
       ratio = ratioRect.height / ratioRect.width;
     }
 
-    return { centerWidth, sideWidth, gap, ratio };
+    return { centerWidth, sideScale, gap, ratio };
   }
 
   /**
@@ -494,15 +542,24 @@ class WMShowcaseCarousel {
     if (!viewportWidth) return;
 
     const count = this.data.length;
-    const { centerWidth, sideWidth, gap, ratio } = this.readMetrics(viewportWidth);
+    const { centerWidth, sideScale, gap, ratio } = this.readMetrics(viewportWidth);
     const centerLeft = Math.round((viewportWidth - centerWidth) / 2);
+
+    // Every slide is laid out at the centered width and scaled down when it is
+    // to the side, rather than having its width animated. A width animation
+    // re-wraps the overlay's text on every frame of the move; scaling zooms the
+    // whole slide, text included, and rides the compositor. The side slides'
+    // width is what the scale leaves, and it still drives their positions.
+    const sideWidth = Math.round(centerWidth * sideScale);
 
     this.track.style.height = `${Math.round(centerWidth * ratio)}px`;
 
     const newPositions = {};
     const placed = new Set();
 
-    newPositions[this.centerIndex] = { x: centerLeft, w: centerWidth, isCenter: true };
+    // offset is how many slots away from the center this slide sits, negative
+    // to the left. It drives both the stacking and the wrap detection below.
+    newPositions[this.centerIndex] = { x: centerLeft, w: centerWidth, isCenter: true, offset: 0, scale: 1 };
     placed.add(this.centerIndex);
 
     // Fill to the right of the center slide, then to the left, until the
@@ -511,7 +568,7 @@ class WMShowcaseCarousel {
     for (let i = 1; x < viewportWidth + sideWidth; i += 1) {
       const index = this.resolveIndex(this.centerIndex + i);
       if (index === null || placed.has(index)) break;
-      newPositions[index] = { x, w: sideWidth, isCenter: false };
+      newPositions[index] = { x, w: sideWidth, isCenter: false, offset: i, scale: sideScale };
       placed.add(index);
       x += sideWidth + gap;
     }
@@ -520,7 +577,7 @@ class WMShowcaseCarousel {
     for (let i = 1; x > -(sideWidth * 2); i += 1) {
       const index = this.resolveIndex(this.centerIndex - i);
       if (index === null || placed.has(index)) break;
-      newPositions[index] = { x, w: sideWidth, isCenter: false };
+      newPositions[index] = { x, w: sideWidth, isCenter: false, offset: -i, scale: sideScale };
       placed.add(index);
       x -= sideWidth + gap;
     }
@@ -528,14 +585,21 @@ class WMShowcaseCarousel {
     // A slide that wrapped around the loop would otherwise animate all the way
     // across the viewport. Jump it to the far edge without a transition first,
     // then let the normal pass animate it into place.
+    //
+    // Whether a slide wrapped is a question about slots, not distance. Moving
+    // the center on by one shifts every slide one slot the other way, so a
+    // slide whose new slot is not the expected one came around the ends. A
+    // distance test cannot tell the two apart: on a narrow screen an ordinary
+    // step already moves a slide further than half the viewport, and every move
+    // was being mistaken for a wrap.
     const teleported = [];
     this.slides.forEach((slide, index) => {
       const previous = this.positions[index];
       const next = newPositions[index];
-      if (!next) return;
-      if (previous && Math.abs(next.x - previous.x) > viewportWidth * 0.5) {
+      if (!next || direction === undefined) return;
+      if (!previous) {
         teleported.push(index);
-      } else if (!previous && direction !== undefined) {
+      } else if (next.offset !== previous.offset - direction) {
         teleported.push(index);
       }
     });
@@ -544,11 +608,11 @@ class WMShowcaseCarousel {
       const slide = this.slides[index];
       const position = newPositions[index];
       slide.classList.add('wm-showcase-carousel-slide--teleport');
-      slide.style.width = `${position.w}px`;
+      slide.style.width = `${centerWidth}px`;
       if (direction === 1) {
-        slide.style.transform = `translate3d(${viewportWidth + position.w}px, -50%, 0)`;
+        slide.style.transform = `translate3d(${viewportWidth + position.w}px, -50%, 0) scale(${position.scale})`;
       } else if (direction === -1) {
-        slide.style.transform = `translate3d(${-(position.w + gap)}px, -50%, 0)`;
+        slide.style.transform = `translate3d(${-(position.w + gap)}px, -50%, 0) scale(${position.scale})`;
       }
     });
 
@@ -558,21 +622,43 @@ class WMShowcaseCarousel {
       this.slides[index].classList.remove('wm-showcase-carousel-slide--teleport');
     });
 
+    const parked = [];
+
     this.slides.forEach((slide, index) => {
       const position = newPositions[index];
       if (position) {
-        slide.style.width = `${position.w}px`;
-        slide.style.transform = `translate3d(${position.x}px, -50%, 0)`;
+        slide.style.width = `${centerWidth}px`;
+        slide.style.transform = `translate3d(${position.x}px, -50%, 0) scale(${position.scale})`;
+        // Nearest the center paints highest. Without this the slides stack in
+        // DOM order, so a slide moving in from the left passed under its
+        // neighbour while one from the right passed over it.
+        slide.style.zIndex = String(
+          Math.max(1, WMShowcaseCarousel.maxSlideZIndex - Math.abs(position.offset))
+        );
         slide.toggleAttribute('data-center', position.isCenter);
         slide.removeAttribute('aria-hidden');
       } else {
-        // Parked off canvas: never visible, never in the tab order.
-        slide.style.transform = 'translate3d(-9999px, -50%, 0)';
-        slide.removeAttribute('data-center');
-        slide.setAttribute('aria-hidden', 'true');
+        parked.push(slide);
       }
       this.updateSlideFocusability(slide, !!position?.isCenter);
     });
+
+    // A slide that has dropped out of the arrangement goes off canvas with the
+    // transition suppressed. Animating it there would send it travelling to
+    // -9999px: harmless for one leaving past the left edge, but a slide leaving
+    // past the right edge would sweep back across the whole carousel on its way
+    // out, which is what made moving backwards look wrong.
+    if (parked.length) {
+      parked.forEach(slide => slide.classList.add('wm-showcase-carousel-slide--teleport'));
+      parked.forEach(slide => {
+        slide.style.transform = 'translate3d(-9999px, -50%, 0)';
+        slide.style.zIndex = '';
+        slide.removeAttribute('data-center');
+        slide.setAttribute('aria-hidden', 'true');
+      });
+      void this.track.offsetHeight;
+      parked.forEach(slide => slide.classList.remove('wm-showcase-carousel-slide--teleport'));
+    }
 
     this.positions = newPositions;
     this.lastWidth = viewportWidth;
@@ -598,10 +684,21 @@ class WMShowcaseCarousel {
     if (!this.progressBar) return;
     const index = fractionalIndex !== undefined ? fractionalIndex : this.centerIndex;
 
-    // Wrapping from the last slide to the first would otherwise animate the bar
-    // all the way back across the track.
-    if (this.skipProgressTransition) {
-      this.skipProgressTransition = false;
+    if (this.progressWrapDirection && fractionalIndex === undefined) {
+      const direction = this.progressWrapDirection;
+      this.progressWrapDirection = 0;
+      this.animateProgressWrap(index, direction);
+      return;
+    }
+
+    this.setProgressTransform(index);
+  }
+
+  setProgressTransform(index, immediate) {
+    this.progressWrapAnimation?.cancel();
+    this.progressWrapAnimation = null;
+
+    if (immediate) {
       this.progressBar.classList.add('wm-showcase-carousel-progress-bar--teleport');
       this.progressBar.style.transform = `translateX(${index * 100}%)`;
       void this.progressBar.offsetHeight;
@@ -610,6 +707,40 @@ class WMShowcaseCarousel {
     }
 
     this.progressBar.style.transform = `translateX(${index * 100}%)`;
+  }
+
+  /**
+   * On a loop the bar keeps travelling the way the carousel is going: it runs
+   * off the end it is leaving, then comes back in from the opposite edge, the
+   * way the slides themselves wrap. Sweeping it straight back across the track
+   * would read as moving backwards.
+   *
+   * The two legs are one animation with a pair of keyframes sharing offset 0.5,
+   * which is the jump across the gap. Duration and easing are read back off the
+   * element so the bar keeps following --carousel-transition.
+   */
+  animateProgressWrap(target, direction) {
+    const count = this.data.length;
+    const from = this.progressWrapFrom;
+    const exit = direction === 1 ? count : -1;
+    const entry = direction === 1 ? -1 : count;
+
+    this.setProgressTransform(target, true);
+    if (typeof this.progressBar.animate !== 'function') return;
+
+    const style = window.getComputedStyle(this.progressBar);
+    const duration = (parseFloat(style.transitionDuration) || 0.6) * 1000;
+    const easing = style.transitionTimingFunction || 'ease';
+
+    this.progressWrapAnimation = this.progressBar.animate(
+      [
+        { transform: `translateX(${from * 100}%)`, easing },
+        { transform: `translateX(${exit * 100}%)`, offset: 0.5 },
+        { transform: `translateX(${entry * 100}%)`, offset: 0.5, easing },
+        { transform: `translateX(${target * 100}%)` }
+      ],
+      { duration, fill: 'none' }
+    );
   }
 
   updateArrows() {
@@ -633,8 +764,13 @@ class WMShowcaseCarousel {
     const step = direction !== undefined
       ? direction
       : (target > this.centerIndex ? 1 : -1);
-    this.skipProgressTransition = this.loop
-      && ((step === 1 && target < this.centerIndex) || (step === -1 && target > this.centerIndex));
+    // A move that goes forward but lands on a lower index (or the reverse) is
+    // the loop wrapping; the progress bar animates that as a wrap too.
+    this.progressWrapDirection = this.loop
+      && ((step === 1 && target < this.centerIndex) || (step === -1 && target > this.centerIndex))
+      ? step
+      : 0;
+    this.progressWrapFrom = this.centerIndex;
     this.centerIndex = target;
     this.layout(step);
     WMShowcaseCarousel.emitEvent(
@@ -690,6 +826,7 @@ class WMShowcaseCarousel {
       // A mostly vertical gesture belongs to the page, not the carousel.
       if (Math.abs(dy) > Math.abs(dx)) {
         this.isDragging = false;
+        this.cancelDragFrame();
         this.restoreTransitions();
         this.resumeAutoplay();
         return;
@@ -701,19 +838,45 @@ class WMShowcaseCarousel {
     }
 
     if (!this.isDragLocked) return;
-    if (event.cancelable) event.preventDefault();
 
+    // touch-action: pan-y already hands horizontal gestures to the plugin, so
+    // there is nothing to preventDefault here and the listener stays passive.
     this.dragDeltaX = this.applyEdgeResistance(dx);
+    this.requestDragFrame();
+  }
+
+  /**
+   * Phones deliver pointer moves faster than they paint, so the offset is
+   * recorded on every event but written once per frame. Writing straight off
+   * the event means several full style passes per frame and a visibly stuttery
+   * drag.
+   */
+  requestDragFrame() {
+    if (this.dragFrame !== null) return;
+    this.dragFrame = requestAnimationFrame(() => {
+      this.dragFrame = null;
+      this.applyDragOffset();
+    });
+  }
+
+  cancelDragFrame() {
+    if (this.dragFrame === null) return;
+    cancelAnimationFrame(this.dragFrame);
+    this.dragFrame = null;
+  }
+
+  applyDragOffset() {
+    const delta = this.dragDeltaX;
 
     this.slides.forEach((slide, index) => {
       const position = this.positions[index];
       if (position) {
-        slide.style.transform = `translate3d(${position.x + this.dragDeltaX}px, -50%, 0)`;
+        slide.style.transform = `translate3d(${position.x + delta}px, -50%, 0) scale(${position.scale})`;
       }
     });
 
     const width = this.lastWidth || this.carousel.clientWidth || 1;
-    this.updateProgress(this.centerIndex - this.dragDeltaX / width);
+    this.updateProgress(this.centerIndex - delta / width);
   }
 
   /**
@@ -730,6 +893,7 @@ class WMShowcaseCarousel {
   handlePointerUp(event) {
     if (!this.isDragging) return;
     this.isDragging = false;
+    this.cancelDragFrame();
     this.restoreTransitions();
 
     if (this.carousel.hasPointerCapture?.(event.pointerId)) {
@@ -759,6 +923,7 @@ class WMShowcaseCarousel {
   handlePointerCancel() {
     if (!this.isDragging) return;
     this.isDragging = false;
+    this.cancelDragFrame();
     this.isDragLocked = false;
     this.dragDeltaX = 0;
     this.restoreTransitions();
@@ -859,7 +1024,7 @@ class WMShowcaseCarousel {
     this.boundHandleClickCapture = event => this.handleClickCapture(event);
 
     this.carousel.addEventListener('pointerdown', this.boundHandlePointerDown);
-    this.carousel.addEventListener('pointermove', this.boundHandlePointerMove, { passive: false });
+    this.carousel.addEventListener('pointermove', this.boundHandlePointerMove, { passive: true });
     this.carousel.addEventListener('pointerup', this.boundHandlePointerUp);
     this.carousel.addEventListener('pointercancel', this.boundHandlePointerCancel);
     this.carousel.addEventListener('dragstart', event => event.preventDefault());
@@ -913,7 +1078,10 @@ class WMShowcaseCarousel {
 
   destroy() {
     this.stopAutoplay();
+    this.cancelDragFrame();
     clearTimeout(this.resizeTimeout);
+    this.progressWrapAnimation?.cancel();
+    this.progressWrapAnimation = null;
 
     if (this.boundHandleResize) {
       window.removeEventListener('resize', this.boundHandleResize);
@@ -935,6 +1103,7 @@ class WMShowcaseCarousel {
     if (userItemsList) userItemsList.style.display = '';
 
     this.el.removeAttribute('data-wm-plugin');
+    this.el.removeAttribute('data-carousel-hide-inactive-text');
     this.carousel = null;
     this.track = null;
     this.metricsEl = null;
