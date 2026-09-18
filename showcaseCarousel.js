@@ -34,7 +34,8 @@ class WMShowcaseCarousel {
       draggable: true, // drag/swipe to move between slides
       clickToCenter: true, // clicking a side slide brings it to the center
       hideInactiveText: false, // hide the text overlay on the side slides
-      showProgress: true, // progress bar below the carousel
+      linkShowcasedSlide: false, // clicking the centered slide follows its button link
+      showProgress: false, // progress bar below the carousel
       autoplay: false, // advance on a timer
       autoplaySpeed: 5000, // ms between automatic advances
       pauseOnHover: true, // pause autoplay while hovered or focused
@@ -102,6 +103,7 @@ class WMShowcaseCarousel {
     this.extractData();
     if (!this.data || this.data.length === 0) return;
     this.applySectionDerivedSettings();
+    this.captureSectionTypography();
     this.removeOrHideOriginalListSectionContent();
     this.buildLayout();
     this.bindEvents();
@@ -113,6 +115,9 @@ class WMShowcaseCarousel {
     this.el.setAttribute('data-wm-plugin', this.pluginName);
     if (this.settings.hideInactiveText) {
       this.el.setAttribute('data-carousel-hide-inactive-text', 'true');
+    }
+    if (this.settings.linkShowcasedSlide) {
+      this.el.setAttribute('data-carousel-link-showcased', 'true');
     }
   }
 
@@ -163,6 +168,56 @@ class WMShowcaseCarousel {
     this.showArrows = typeof navigationControls === 'string'
       ? navigationControls.toLowerCase().includes('arrow')
       : true;
+
+    this.applySectionAspectRatio();
+  }
+
+  /**
+   * Section » Media Aspect Ratio, which Squarespace stores as "4:3". It becomes
+   * the default behind --carousel-slide-aspect-ratio, so the slides are shaped
+   * the way the section says without anyone writing CSS, and the property still
+   * overrides it. Ratios it does not recognise (an "auto" style setting, or a
+   * layout with no media control) simply leave the stylesheet's default.
+   */
+  applySectionAspectRatio() {
+    const ratio = this.options?.mediaAspectRatio;
+    if (typeof ratio !== 'string') return;
+
+    const parts = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(ratio.trim());
+    if (!parts) return;
+
+    const width = parseFloat(parts[1]);
+    const height = parseFloat(parts[2]);
+    if (!width || !height) return;
+
+    this.el.style.setProperty('--carousel-sqs-aspect-ratio', `${width} / ${height}`);
+  }
+
+  /**
+   * Squarespace resolves the list section's own Title, Body and Button font
+   * sizes — whichever preset or custom value the section is set to, at the
+   * current breakpoint — onto its markup. Rather than naming a typography
+   * variable, the plugin reads what the section already renders and offers it
+   * as the default behind its own tokens, so the carousel's type matches the
+   * rest of the section by default and an override still wins.
+   */
+  captureSectionTypography() {
+    if (!this.originalContainer) return;
+
+    const sources = {
+      '--carousel-sqs-title-size': '.list-item-content__title',
+      '--carousel-sqs-description-size': '.list-item-content__description',
+      '--carousel-sqs-button-size': '.list-item-content__button'
+    };
+
+    Object.entries(sources).forEach(([property, selector]) => {
+      const source = this.originalContainer.querySelector(selector);
+      if (!source) return;
+      const size = window.getComputedStyle(source).fontSize;
+      // A hidden element still resolves font-size, so this keeps working after
+      // the original list has been put away.
+      if (size) this.el.style.setProperty(property, size);
+    });
   }
 
   removeOrHideOriginalListSectionContent() {
@@ -438,6 +493,13 @@ class WMShowcaseCarousel {
       description.className = 'wm-showcase-carousel-description';
       description.innerHTML = item.description;
       content.appendChild(description);
+    }
+
+    // Recorded whether or not the button is shown: the linkShowcasedSlide
+    // setting can send the whole slide here.
+    if (item.button?.buttonLink) {
+      slide.dataset.link = item.button.buttonLink;
+      if (item.button.buttonNewWindow) slide.dataset.linkTarget = '_blank';
     }
 
     if (item.button?.buttonText && this.options?.isButtonEnabled !== false) {
@@ -959,9 +1021,15 @@ class WMShowcaseCarousel {
       return;
     }
 
-    if (!this.settings.clickToCenter) return;
     const slide = event.target.closest?.('.wm-showcase-carousel-slide');
-    if (!slide || slide.hasAttribute('data-center')) return;
+    if (!slide) return;
+
+    if (slide.hasAttribute('data-center')) {
+      this.followSlideLink(event, slide, link);
+      return;
+    }
+
+    if (!this.settings.clickToCenter) return;
 
     const index = Number(slide.dataset.index);
     if (!Number.isFinite(index)) return;
@@ -971,6 +1039,32 @@ class WMShowcaseCarousel {
       event.stopPropagation();
     }
     this.goTo(index, this.slideDirection(index));
+  }
+
+  /**
+   * The centered slide can act as one big link to the item's button link. A
+   * click that landed on the button or any other link is left alone — that
+   * element is the real link, and it is also what a keyboard reaches, so this
+   * adds no second tab stop and no duplicate announcement.
+   */
+  followSlideLink(event, slide, link) {
+    if (!this.settings.linkShowcasedSlide || link) return;
+
+    const href = slide.dataset.link;
+    if (!href) return;
+
+    event.preventDefault();
+    WMShowcaseCarousel.emitEvent(
+      ':slideClick',
+      { el: this.el, index: Number(slide.dataset.index), href },
+      this.el
+    );
+
+    if (slide.dataset.linkTarget === '_blank') {
+      window.open(href, '_blank', 'noopener');
+    } else {
+      window.location.href = href;
+    }
   }
 
   handleKeydown(event) {
@@ -1038,7 +1132,12 @@ class WMShowcaseCarousel {
     // resize handler would run it once per intermediate width.
     this.boundHandleResize = () => {
       clearTimeout(this.resizeTimeout);
-      this.resizeTimeout = setTimeout(() => this.layout(), 100);
+      this.resizeTimeout = setTimeout(() => {
+        // Squarespace's own font sizes change across breakpoints, so they are
+        // read again whenever the carousel is re-laid out.
+        this.captureSectionTypography();
+        this.layout();
+      }, 100);
     };
     window.addEventListener('resize', this.boundHandleResize, { passive: true });
     window.addEventListener('orientationchange', this.boundHandleResize);
@@ -1104,6 +1203,9 @@ class WMShowcaseCarousel {
 
     this.el.removeAttribute('data-wm-plugin');
     this.el.removeAttribute('data-carousel-hide-inactive-text');
+    ['--carousel-sqs-title-size', '--carousel-sqs-description-size', '--carousel-sqs-button-size',
+      '--carousel-sqs-aspect-ratio']
+      .forEach(property => this.el.style.removeProperty(property));
     this.carousel = null;
     this.track = null;
     this.metricsEl = null;

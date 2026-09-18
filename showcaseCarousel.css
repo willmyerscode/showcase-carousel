@@ -10,7 +10,7 @@
  * --carousel-center-width: 48vw;                   (width of the centered slide)
  * --carousel-side-scale: 0.8;                      (how large the slides either side are next to the centered one)
  * --carousel-slide-gap: 20px;                      (space between slides)
- * --carousel-slide-aspect-ratio: 16 / 9;           (aspect ratio of every slide)
+ * --carousel-slide-aspect-ratio: the section's Media Aspect Ratio;   (shape of every slide)
  * --carousel-slide-radius: 0px;
  * --carousel-transition: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
  * --carousel-inactive-opacity: 0.5;                (opacity of the non centered slides)
@@ -20,10 +20,11 @@
  * --carousel-text-align: left;
  * --carousel-text-gradient: linear-gradient(to top, hsla(var(--black-hsl), 0.7) 0%, transparent 100%);
  * --carousel-title-color: hsla(var(--white-hsl), 1);
- * --carousel-title-size: 1.2rem;
+ * --carousel-title-size: the section's own item title size;
  * --carousel-title-margin: 0.3em;
  * --carousel-description-color: hsla(var(--white-hsl), 1);
- * --carousel-description-size: 0.9rem;
+ * --carousel-description-size: the section's own body size;
+ * --carousel-item-button-size: the section's own button size;
  * --carousel-description-opacity: 0.85;
  * --carousel-inactive-text-opacity: 1;             (text opacity on the non centered slides; the hideInactiveText setting overrides this with 0)
  *
@@ -58,8 +59,8 @@
  * --carousel-side-scale-mobile: 0.72;
  * --carousel-slide-gap-mobile: 10px;
  * --carousel-text-padding-mobile: 16px;
- * --carousel-title-size-mobile: 1rem;
- * --carousel-description-size-mobile: 0.8rem;
+ * --carousel-title-size-mobile: (unset; Squarespace's own size is already responsive)
+ * --carousel-description-size-mobile: (unset)
  * --carousel-arrow-size-mobile: 44px;
  * --carousel-arrow-icon-width-mobile: 28px;
  * --carousel-arrow-offset-mobile: 2vw;
@@ -154,7 +155,7 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="ratio"] {
   width: 100px;
   height: auto;
-  aspect-ratio: var(--carousel-slide-aspect-ratio, 16 / 9);
+  aspect-ratio: var(--carousel-slide-aspect-ratio, var(--carousel-sqs-aspect-ratio, 16 / 9));
 }
 
 /* ================================
@@ -194,6 +195,12 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
   cursor: pointer;
 }
 
+/* linkShowcasedSlide setting: the centered slide is only a pointer target when
+   the item actually has a button link to follow. */
+[data-wm-plugin="showcase-carousel"][data-carousel-link-showcased] .wm-showcase-carousel-slide[data-center][data-link] {
+  cursor: pointer;
+}
+
 /* Transitions are suspended while a slide is repositioned across the loop and
    while the pointer is down, so both track the gesture exactly. */
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide--teleport,
@@ -206,7 +213,7 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-media {
   position: relative;
   width: 100%;
-  aspect-ratio: var(--carousel-slide-aspect-ratio, 16 / 9);
+  aspect-ratio: var(--carousel-slide-aspect-ratio, var(--carousel-sqs-aspect-ratio, 16 / 9));
   overflow: hidden;
   border-radius: var(--carousel-slide-radius, 0px);
   background: var(--carousel-slide-bg, hsla(var(--black-hsl), 0.06));
@@ -253,13 +260,15 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
 
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-title {
   margin: 0 0 var(--carousel-title-margin, 0.3em);
-  font-size: var(--carousel-title-size, 1.2rem);
+  /* Defaults to the size Squarespace resolved for this section's item titles,
+     captured by the plugin; the token still overrides it. */
+  font-size: var(--carousel-title-size, var(--carousel-sqs-title-size, 1.2rem));
   color: var(--carousel-title-color, hsla(var(--white-hsl), 1));
 }
 
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-description {
   margin: 0;
-  font-size: var(--carousel-description-size, 0.9rem);
+  font-size: var(--carousel-description-size, var(--carousel-sqs-description-size, 0.9rem));
   color: var(--carousel-description-color, hsla(var(--white-hsl), 1));
   opacity: var(--carousel-description-opacity, 0.85);
 }
@@ -279,6 +288,7 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-item-button {
   display: inline-block;
   text-decoration: none;
+  font-size: var(--carousel-item-button-size, var(--carousel-sqs-button-size, inherit));
 }
 
 /* ================================
@@ -445,12 +455,14 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
     padding: var(--carousel-text-padding-mobile, 16px);
   }
 
+  /* Squarespace's own sizes are already responsive, so the mobile tokens only
+     step in when they are set. */
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-title {
-    font-size: var(--carousel-title-size-mobile, 1rem);
+    font-size: var(--carousel-title-size-mobile, var(--carousel-title-size, var(--carousel-sqs-title-size, 1rem)));
   }
 
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-description {
-    font-size: var(--carousel-description-size-mobile, 0.8rem);
+    font-size: var(--carousel-description-size-mobile, var(--carousel-description-size, var(--carousel-sqs-description-size, 0.8rem)));
   }
 
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow {
