@@ -1,0 +1,433 @@
+/**
+ * Showcase Carousel Plugin for Squarespace
+ * Copyright Will-Myers.com
+ **/
+
+/* Custom Property Reference
+ *
+ * Layout:
+ * --carousel-bleed: 0px;                          (how far the carousel pulls past the section gutter when the fullBleed setting is off)
+ * --carousel-center-width: 48vw;                   (width of the centered slide)
+ * --carousel-side-width: 38vw;                     (width of the slides either side)
+ * --carousel-slide-gap: 20px;                      (space between slides)
+ * --carousel-slide-aspect-ratio: 16 / 9;           (aspect ratio of every slide)
+ * --carousel-slide-radius: 0px;
+ * --carousel-transition: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+ * --carousel-inactive-opacity: 0.5;                (opacity of the non centered slides)
+ *
+ * Text overlay:
+ * --carousel-text-padding: 24px;
+ * --carousel-text-align: left;
+ * --carousel-text-gradient: linear-gradient(to top, hsla(var(--black-hsl), 0.7) 0%, transparent 100%);
+ * --carousel-title-color: hsla(var(--white-hsl), 1);
+ * --carousel-title-size: 1.2rem;
+ * --carousel-title-margin: 0.3em;
+ * --carousel-description-color: hsla(var(--white-hsl), 1);
+ * --carousel-description-size: 0.9rem;
+ * --carousel-description-opacity: 0.85;
+ * --carousel-inactive-text-opacity: 1;             (text opacity on the non centered slides)
+ *
+ * Arrows:
+ * --carousel-arrow-size: 60px;
+ * --carousel-arrow-icon-width: 36px;
+ * --carousel-arrow-offset: 3vw;
+ * --carousel-arrow-bg: var(--primaryButtonBackgroundColor);
+ * --carousel-arrow-color: var(--primaryButtonTextColor);
+ * --carousel-arrow-radius: 50%;
+ * --carousel-arrow-stroke-width: 1.5;
+ * --carousel-arrow-hover-scale: 1.05;
+ * --carousel-arrow-disabled-opacity: 0.3;
+ *
+ * Progress bar:
+ * --carousel-progress-margin-top: 60px;
+ * --carousel-progress-height: 4px;
+ * --carousel-progress-radius: 2px;
+ * --carousel-progress-track-color: hsla(var(--black-hsl), 0.1);
+ * --carousel-progress-bar-color: var(--primaryButtonBackgroundColor);
+ *
+ * Section title & button:
+ * --carousel-section-title-color: var(--list-section-title-color);
+ * --carousel-section-title-align: center;
+ * --carousel-section-title-margin: 2rem;
+ * --carousel-section-button-margin: 2rem;
+ * --carousel-section-button-align: center;
+ *
+ * Mobile (max-width: 767px):
+ * --carousel-center-width-mobile: 86vw;
+ * --carousel-side-width-mobile: 38vw;
+ * --carousel-slide-gap-mobile: 10px;
+ * --carousel-text-padding-mobile: 16px;
+ * --carousel-title-size-mobile: 1rem;
+ * --carousel-description-size-mobile: 0.8rem;
+ * --carousel-arrow-size-mobile: 44px;
+ * --carousel-arrow-icon-width-mobile: 28px;
+ * --carousel-arrow-offset-mobile: 2vw;
+ * --carousel-progress-margin-top-mobile: 32px;
+ */
+
+/* ================================
+   HIDE ORIGINAL LIST SECTION
+   ================================ */
+
+[data-wm-plugin="showcase-carousel"] .user-items-list {
+  display: none !important;
+}
+
+body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .user-items-list {
+  display: block !important;
+}
+
+body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-content {
+  display: none !important;
+}
+
+/* ================================
+   LAYOUT
+   ================================ */
+
+[data-wm-plugin="showcase-carousel"] .wm-plugin-content {
+  width: auto;
+  padding-top: var(--carousel-content-padding-top, var(--sqs-site-gutter, 4vw));
+  padding-bottom: var(--carousel-content-padding-bottom, var(--sqs-site-gutter, 4vw));
+  box-sizing: border-box;
+}
+
+/* With the fullBleed setting on (the default) the plugin measures the distance
+   to each window edge and writes those offsets inline, which is exact whatever
+   the section's layout width is. --carousel-bleed is the manual alternative for
+   fullBleed: false. */
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel {
+  position: relative;
+  margin-left: calc(-1 * var(--carousel-bleed, 0px));
+  margin-right: calc(-1 * var(--carousel-bleed, 0px));
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-track {
+  position: relative;
+  width: 100%;
+  transition: height var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel[data-carousel-draggable] .wm-showcase-carousel-track {
+  cursor: grab;
+  user-select: none;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel[data-carousel-draggable][data-carousel-dragging] .wm-showcase-carousel-track {
+  cursor: grabbing;
+}
+
+/* Hidden probes: JS reads their resolved widths so all of the sizing above can
+   stay in custom properties the user controls, including inside media queries. */
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics span {
+  display: block;
+  height: 0;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="center"] {
+  width: var(--carousel-center-width, 48vw);
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="side"] {
+  width: var(--carousel-side-width, 38vw);
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="gap"] {
+  width: var(--carousel-slide-gap, 20px);
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="ratio"] {
+  width: 100px;
+  height: auto;
+  aspect-ratio: var(--carousel-slide-aspect-ratio, 16 / 9);
+}
+
+/* ================================
+   SLIDES
+   ================================ */
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  /* Parked off canvas until the layout pass places it. */
+  transform: translate3d(-9999px, -50%, 0);
+  opacity: var(--carousel-inactive-opacity, 0.5);
+  transition: transform var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)),
+              width var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)),
+              opacity var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1));
+  will-change: transform, width;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide[data-center] {
+  opacity: 1;
+  z-index: 2;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel[data-carousel-draggable] .wm-showcase-carousel-slide:not([data-center]) {
+  cursor: pointer;
+}
+
+/* Transitions are suspended while a slide is repositioned across the loop and
+   while the pointer is down, so both track the gesture exactly. */
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide--teleport,
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-progress-bar--teleport,
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel[data-carousel-dragging] .wm-showcase-carousel-slide,
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel[data-carousel-dragging] .wm-showcase-carousel-progress-bar {
+  transition: none !important;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--carousel-slide-aspect-ratio, 16 / 9);
+  overflow: hidden;
+  border-radius: var(--carousel-slide-radius, 0px);
+  background: var(--carousel-slide-bg, hsla(var(--black-hsl), 0.06));
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-media img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+
+/* ================================
+   TEXT OVERLAY
+   ================================ */
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: var(--carousel-text-padding, 24px);
+  box-sizing: border-box;
+  text-align: var(--carousel-text-align, left);
+  background: var(--carousel-text-gradient, linear-gradient(to top, hsla(var(--black-hsl), 0.7) 0%, transparent 100%));
+  z-index: 2;
+  transition: opacity var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide:not([data-center]) .wm-showcase-carousel-content {
+  opacity: var(--carousel-inactive-text-opacity, 1);
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-title {
+  margin: 0 0 var(--carousel-title-margin, 0.3em);
+  font-size: var(--carousel-title-size, 1.2rem);
+  color: var(--carousel-title-color, hsla(var(--white-hsl), 1));
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-description {
+  margin: 0;
+  font-size: var(--carousel-description-size, 0.9rem);
+  color: var(--carousel-description-color, hsla(var(--white-hsl), 1));
+  opacity: var(--carousel-description-opacity, 0.85);
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-description > *:first-child {
+  margin-top: 0;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-description > *:last-child {
+  margin-bottom: 0;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-item-button-wrapper {
+  margin-top: var(--carousel-item-button-margin, 1rem);
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-item-button {
+  display: inline-block;
+  text-decoration: none;
+}
+
+/* ================================
+   ARROWS
+   ================================ */
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 10;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow {
+  pointer-events: auto;
+  width: var(--carousel-arrow-size, 60px);
+  height: var(--carousel-arrow-size, 60px);
+  padding: 0;
+  border: none;
+  border-radius: var(--carousel-arrow-radius, 50%);
+  background-color: var(--carousel-arrow-bg, var(--primaryButtonBackgroundColor, #000));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow:hover {
+  transform: scale(var(--carousel-arrow-hover-scale, 1.05));
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow:disabled {
+  opacity: var(--carousel-arrow-disabled-opacity, 0.3);
+  cursor: default;
+  transform: none;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow svg {
+  width: var(--carousel-arrow-icon-width, 36px);
+  height: auto;
+  fill: none;
+  stroke: var(--carousel-arrow-color, var(--primaryButtonTextColor, #fff));
+  stroke-width: var(--carousel-arrow-stroke-width, 1.5);
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow--prev {
+  margin-left: var(--carousel-arrow-offset, 3vw);
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow--next {
+  margin-right: var(--carousel-arrow-offset, 3vw);
+}
+
+/* ================================
+   PROGRESS BAR
+   ================================ */
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-progress {
+  position: relative;
+  width: 100%;
+  height: var(--carousel-progress-height, 4px);
+  margin-top: var(--carousel-progress-margin-top, 60px);
+  border-radius: var(--carousel-progress-radius, 2px);
+  background-color: var(--carousel-progress-track-color, hsla(var(--black-hsl), 0.1));
+  overflow: hidden;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-progress-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--carousel-progress-bar-color, var(--primaryButtonBackgroundColor, #000));
+  transition: transform var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1));
+  will-change: transform;
+}
+
+/* ================================
+   SECTION TITLE & BUTTON
+   ================================ */
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-section-title {
+  margin: 0 0 var(--carousel-section-title-margin, 2rem);
+  text-align: var(--carousel-section-title-align, center);
+  color: var(--carousel-section-title-color, var(--list-section-title-color, var(--headingLargeColor)));
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-section-title h2,
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-section-title p {
+  margin: 0;
+  color: inherit;
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-section-button {
+  margin-top: var(--carousel-section-button-margin, 2rem);
+  text-align: var(--carousel-section-button-align, center);
+}
+
+[data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-button {
+  display: inline-block;
+  text-decoration: none;
+}
+
+/* ================================
+   REDUCED MOTION
+   ================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide,
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-track,
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-progress-bar {
+    transition-duration: 0.01ms;
+  }
+}
+
+/* ================================
+   MOBILE
+   ================================ */
+
+@media (max-width: 767px) {
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="center"] {
+    width: var(--carousel-center-width-mobile, 86vw);
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="side"] {
+    width: var(--carousel-side-width-mobile, 38vw);
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-metrics [data-metric="gap"] {
+    width: var(--carousel-slide-gap-mobile, 10px);
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-content {
+    padding: var(--carousel-text-padding-mobile, 16px);
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-title {
+    font-size: var(--carousel-title-size-mobile, 1rem);
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-description {
+    font-size: var(--carousel-description-size-mobile, 0.8rem);
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow {
+    width: var(--carousel-arrow-size-mobile, 44px);
+    height: var(--carousel-arrow-size-mobile, 44px);
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow svg {
+    width: var(--carousel-arrow-icon-width-mobile, 28px);
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow--prev {
+    margin-left: var(--carousel-arrow-offset-mobile, 2vw);
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow--next {
+    margin-right: var(--carousel-arrow-offset-mobile, 2vw);
+  }
+
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-progress {
+    margin-top: var(--carousel-progress-margin-top-mobile, 32px);
+  }
+}
