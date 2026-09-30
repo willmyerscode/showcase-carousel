@@ -328,6 +328,15 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
   box-sizing: border-box;
 }
 
+/* The carousel clips its overflow to hide the off canvas slides, and a row of
+   arrows at its bottom edge would lose the edge of the hover scale and focus
+   ring to that clip. Padding sits inside the clip, and the matching negative
+   margin keeps the room from pushing anything below further down. */
+[data-wm-plugin="showcase-carousel"][data-carousel-arrow-position^="bottom"] .wm-showcase-carousel {
+  padding-bottom: 12px;
+  margin-bottom: -12px;
+}
+
 /* Grouped, the side offset moves from the arrows onto the container so it
    applies once, on whichever side the pair sits. */
 [data-wm-plugin="showcase-carousel"][data-carousel-arrow-position^="bottom-"] .wm-showcase-carousel-arrows {
