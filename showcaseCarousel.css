@@ -35,8 +35,8 @@
  * --carousel-arrow-offset: 3vw;                  (distance from the carousel's left and right edges)
  * --carousel-arrow-margin-top: 20px;              (space between the slides and the arrows for the bottom arrowPosition values)
  * --carousel-arrow-gap: 10px;                     (space between the arrows when arrowPosition is 'bottom-left' or 'bottom-right')
- * --carousel-arrow-bg: var(--primaryButtonBackgroundColor);
- * --carousel-arrow-color: var(--primaryButtonTextColor);
+ * --carousel-arrow-bg: var(--list-section-carousel-arrow-background-color);   (the section theme's carousel arrow colors, falling back to the primary button colors)
+ * --carousel-arrow-color: var(--list-section-carousel-arrow-color);
  * --carousel-arrow-radius: 50%;
  * --carousel-arrow-stroke-width: 1.5;
  * --carousel-arrow-hover-scale: 1.05;
@@ -365,7 +365,7 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
   padding: 0;
   border: none;
   border-radius: var(--carousel-arrow-radius, 50%);
-  background-color: var(--carousel-arrow-bg, var(--primaryButtonBackgroundColor, #000));
+  background-color: var(--carousel-arrow-bg, var(--list-section-carousel-arrow-background-color, var(--primaryButtonBackgroundColor, #000)));
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -387,7 +387,7 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
   width: var(--carousel-arrow-icon-width, 36px);
   height: auto;
   fill: none;
-  stroke: var(--carousel-arrow-color, var(--primaryButtonTextColor, #fff));
+  stroke: var(--carousel-arrow-color, var(--list-section-carousel-arrow-color, var(--primaryButtonTextColor, #fff)));
   stroke-width: var(--carousel-arrow-stroke-width, 1.5);
 }
 
