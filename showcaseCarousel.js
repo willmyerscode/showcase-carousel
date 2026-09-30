@@ -272,11 +272,23 @@ class WMShowcaseCarousel {
   buildSectionButton() {
     if (!this.isSectionButtonEnabled || !this.sectionButton?.buttonText) return null;
 
+    // Squarespace has already rendered this section's own button. Copying the
+    // classes it put there — rather than assembling a guess — carries the
+    // section's button style and size across exactly, including the primary or
+    // secondary variant, which the section context does not expose.
+    const native = this.el.querySelector('.user-items-list .list-section-button');
+    const nativeContainer = this.el.querySelector('.user-items-list .list-section-button-container');
+
     const buttonWrap = document.createElement('div');
     buttonWrap.className = 'wm-showcase-carousel-section-button list-section-button-container';
+    if (nativeContainer?.dataset.buttonSize) {
+      buttonWrap.dataset.buttonSize = nativeContainer.dataset.buttonSize;
+    }
 
     const button = document.createElement('a');
-    button.className = 'wm-showcase-carousel-button sqs-block-button-element sqs-button-element--primary';
+    button.className = native
+      ? `wm-showcase-carousel-button ${native.className}`
+      : 'wm-showcase-carousel-button list-section-button sqs-block-button-element sqs-button-element--primary';
     button.href = this.sectionButton.buttonLink || '#';
     button.textContent = this.sectionButton.buttonText;
     if (this.sectionButton.buttonNewWindow) {
