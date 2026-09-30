@@ -35,6 +35,7 @@ class WMShowcaseCarousel {
       clickToCenter: true, // clicking a side slide brings it to the center
       hideInactiveText: false, // hide the text overlay on the side slides
       linkShowcasedSlide: false, // clicking the centered slide follows its button link
+      arrowPosition: 'center', // 'center', 'bottom' (bottom corners), 'bottom-left' or 'bottom-right' (both arrows together)
       showProgress: false, // progress bar below the carousel
       autoplay: false, // advance on a timer
       autoplaySpeed: 5000, // ms between automatic advances
@@ -60,6 +61,7 @@ class WMShowcaseCarousel {
     this.track = null;
     this.metricsEl = null;
     this.progressBar = null;
+    this.arrowsEl = null;
     this.prevButton = null;
     this.nextButton = null;
     this.slides = [];
@@ -118,6 +120,9 @@ class WMShowcaseCarousel {
     }
     if (this.settings.linkShowcasedSlide) {
       this.el.setAttribute('data-carousel-link-showcased', 'true');
+    }
+    if (['bottom', 'bottom-left', 'bottom-right'].includes(this.settings.arrowPosition)) {
+      this.el.setAttribute('data-carousel-arrow-position', this.settings.arrowPosition);
     }
   }
 
@@ -303,6 +308,7 @@ class WMShowcaseCarousel {
   buildArrows() {
     const arrows = document.createElement('div');
     arrows.className = 'wm-showcase-carousel-arrows';
+    this.arrowsEl = arrows;
 
     this.prevButton = document.createElement('button');
     this.prevButton.type = 'button';
@@ -627,6 +633,9 @@ class WMShowcaseCarousel {
     const sideWidth = Math.round(centerWidth * sideScale);
 
     this.track.style.height = `${Math.round(centerWidth * ratio)}px`;
+    // The arrows cover the slides only, not the progress bar underneath, so
+    // both positions line up with the slides themselves.
+    if (this.arrowsEl) this.arrowsEl.style.height = this.track.style.height;
 
     const newPositions = {};
     const placed = new Set();
@@ -1215,6 +1224,7 @@ class WMShowcaseCarousel {
 
     this.el.removeAttribute('data-wm-plugin');
     this.el.removeAttribute('data-carousel-hide-inactive-text');
+    this.el.removeAttribute('data-carousel-arrow-position');
     ['--carousel-sqs-title-size', '--carousel-sqs-description-size', '--carousel-sqs-button-size',
       '--carousel-sqs-aspect-ratio']
       .forEach(property => this.el.style.removeProperty(property));
@@ -1222,6 +1232,7 @@ class WMShowcaseCarousel {
     this.track = null;
     this.metricsEl = null;
     this.progressBar = null;
+    this.arrowsEl = null;
     this.prevButton = null;
     this.nextButton = null;
     this.slides = [];

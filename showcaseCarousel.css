@@ -14,6 +14,7 @@
  * --carousel-slide-radius: 0px;
  * --carousel-transition: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
  * --carousel-inactive-brightness: 0.6;             (brightness of the non centered slides; 1 leaves them untouched)
+ * --carousel-inactive-opacity: 1;                  (opacity of the non centered slides, applied on top of the brightness)
  *
  * Text overlay:
  * --carousel-text-padding: 24px;
@@ -31,7 +32,9 @@
  * Arrows:
  * --carousel-arrow-size: 60px;
  * --carousel-arrow-icon-width: 36px;
- * --carousel-arrow-offset: 3vw;
+ * --carousel-arrow-offset: 3vw;                  (distance from the carousel's left and right edges)
+ * --carousel-arrow-offset-bottom: the side offset; (distance from the bottom edge for the bottom arrowPosition values)
+ * --carousel-arrow-gap: 10px;                     (space between the arrows when arrowPosition is 'bottom-left' or 'bottom-right')
  * --carousel-arrow-bg: var(--primaryButtonBackgroundColor);
  * --carousel-arrow-color: var(--primaryButtonTextColor);
  * --carousel-arrow-radius: 50%;
@@ -64,6 +67,7 @@
  * --carousel-arrow-size-mobile: 44px;
  * --carousel-arrow-icon-width-mobile: 28px;
  * --carousel-arrow-offset-mobile: 2vw;
+ * --carousel-arrow-offset-bottom-mobile: the mobile side offset;
  * --carousel-progress-margin-top-mobile: 32px;
  */
 
@@ -173,8 +177,10 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
      stays where the layout pass put it. */
   transform-origin: left center;
   filter: brightness(var(--carousel-inactive-brightness, 0.6));
+  opacity: var(--carousel-inactive-opacity, 1);
   transition: transform var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)),
-              filter var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1));
+              filter var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)),
+              opacity var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1));
 }
 
 /* Promote the slides only for the duration of a drag. Holding every slide on
@@ -189,6 +195,7 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
    the center, so it cannot be set here. */
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide[data-center] {
   filter: none;
+  opacity: 1;
 }
 
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel[data-carousel-draggable] .wm-showcase-carousel-slide:not([data-center]) {
@@ -300,12 +307,43 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
   top: 0;
   left: 0;
   width: 100%;
+  /* Matched to the track's height by the layout pass. */
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   pointer-events: none;
   z-index: 10;
+  transition: height var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+/* arrowPosition setting: 'bottom' drops the arrows into the bottom corners;
+   'bottom-left' and 'bottom-right' group them together in one corner. */
+[data-wm-plugin="showcase-carousel"][data-carousel-arrow-position^="bottom"] .wm-showcase-carousel-arrows {
+  align-items: flex-end;
+  padding-bottom: var(--carousel-arrow-offset-bottom, var(--carousel-arrow-offset, 3vw));
+  box-sizing: border-box;
+}
+
+/* Grouped, the side offset moves from the arrows onto the container so it
+   applies once, on whichever side the pair sits. */
+[data-wm-plugin="showcase-carousel"][data-carousel-arrow-position^="bottom-"] .wm-showcase-carousel-arrows {
+  gap: var(--carousel-arrow-gap, 10px);
+  padding-left: var(--carousel-arrow-offset, 3vw);
+  padding-right: var(--carousel-arrow-offset, 3vw);
+}
+
+[data-wm-plugin="showcase-carousel"][data-carousel-arrow-position="bottom-left"] .wm-showcase-carousel-arrows {
+  justify-content: flex-start;
+}
+
+[data-wm-plugin="showcase-carousel"][data-carousel-arrow-position="bottom-right"] .wm-showcase-carousel-arrows {
+  justify-content: flex-end;
+}
+
+[data-wm-plugin="showcase-carousel"][data-carousel-arrow-position^="bottom-"] .wm-showcase-carousel-arrow {
+  margin-left: 0;
+  margin-right: 0;
 }
 
 [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow {
@@ -407,6 +445,7 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
 @media (prefers-reduced-motion: reduce) {
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide,
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-track,
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrows,
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-progress-bar {
     transition-duration: 0.01ms;
   }
@@ -422,10 +461,12 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
      --carousel-transition-mobile can give a phone its own timing. */
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-slide {
     transition: transform var(--carousel-transition-mobile, var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1))),
-                filter var(--carousel-transition-mobile, var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)));
+                filter var(--carousel-transition-mobile, var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1))),
+                opacity var(--carousel-transition-mobile, var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)));
   }
 
-  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-track {
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-track,
+  [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrows {
     transition: height var(--carousel-transition-mobile, var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)));
   }
 
@@ -480,6 +521,20 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
 
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-arrow--next {
     margin-right: var(--carousel-arrow-offset-mobile, 2vw);
+  }
+
+  [data-wm-plugin="showcase-carousel"][data-carousel-arrow-position^="bottom"] .wm-showcase-carousel-arrows {
+    padding-bottom: var(--carousel-arrow-offset-bottom-mobile, var(--carousel-arrow-offset-mobile, 2vw));
+  }
+
+  [data-wm-plugin="showcase-carousel"][data-carousel-arrow-position^="bottom-"] .wm-showcase-carousel-arrows {
+    padding-left: var(--carousel-arrow-offset-mobile, 2vw);
+    padding-right: var(--carousel-arrow-offset-mobile, 2vw);
+  }
+
+  [data-wm-plugin="showcase-carousel"][data-carousel-arrow-position^="bottom-"] .wm-showcase-carousel-arrow {
+    margin-left: 0;
+    margin-right: 0;
   }
 
   [data-wm-plugin="showcase-carousel"] .wm-showcase-carousel-progress {
