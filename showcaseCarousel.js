@@ -633,9 +633,12 @@ class WMShowcaseCarousel {
     const sideWidth = Math.round(centerWidth * sideScale);
 
     this.track.style.height = `${Math.round(centerWidth * ratio)}px`;
-    // The arrows cover the slides only, not the progress bar underneath, so
-    // both positions line up with the slides themselves.
-    if (this.arrowsEl) this.arrowsEl.style.height = this.track.style.height;
+    // Centered arrows overlay the slides only, not the progress bar
+    // underneath. The bottom positions sit in their own row below the slides
+    // and take their height from the arrows.
+    if (this.arrowsEl && !this.el.hasAttribute('data-carousel-arrow-position')) {
+      this.arrowsEl.style.height = this.track.style.height;
+    }
 
     const newPositions = {};
     const placed = new Set();
