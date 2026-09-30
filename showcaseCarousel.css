@@ -13,7 +13,7 @@
  * --carousel-slide-aspect-ratio: the section's Media Aspect Ratio;   (shape of every slide)
  * --carousel-slide-radius: 0px;
  * --carousel-transition: 0.6s cubic-bezier(0.4, 0, 0.2, 1);
- * --carousel-inactive-brightness: 0.5;             (brightness of the non centered slides; 1 leaves them untouched)
+ * --carousel-inactive-brightness: 0.6;             (brightness of the non centered slides; 1 leaves them untouched)
  *
  * Text overlay:
  * --carousel-text-padding: 24px;
@@ -172,7 +172,7 @@ body.sqs-edit-mode-active [data-wm-plugin="showcase-carousel"] .wm-plugin-conten
      the left edge keeps the arithmetic in visual widths: a slide's left edge
      stays where the layout pass put it. */
   transform-origin: left center;
-  filter: brightness(var(--carousel-inactive-brightness, 0.5));
+  filter: brightness(var(--carousel-inactive-brightness, 0.6));
   transition: transform var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1)),
               filter var(--carousel-transition, 0.6s cubic-bezier(0.4, 0, 0.2, 1));
 }
